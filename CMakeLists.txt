@@ -38,3 +38,23 @@ if (RPREFETCH_ENABLE_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
+
+# --- Google Benchmark integration ---
+if (RPREFETCH_ENABLE_BENCHMARKS)
+  include(FetchContent)
+
+  # Can change git tag to whatever
+  FetchContent_Declare(
+    benchmark
+    GIT_REPOSITORY https://github.com/google/benchmark.git
+    GIT_TAG v1.9.4
+  )
+
+  # We probably don't need benchmark's own tests here
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+
+  FetchContent_MakeAvailable(benchmark)
+
+  # Put benchmark sources in benchmark/
+  add_subdirectory(benchmark)
+endif()
