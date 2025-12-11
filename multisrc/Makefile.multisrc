@@ -1,0 +1,55 @@
+# ==============================================================================
+# Makefile.common - Lightweight substitute for MultiSource build script
+# Purpose: Automatically discover .c files, generate Baseline (native) and Bitcode (linked.rbc)
+# ==============================================================================
+
+# 1. Default Toolchain Configuration
+CC          = clang
+CXX         = clang++
+LLVM_LINK   = llvm-link
+MKDIR       = mkdir -p
+
+# Compilation flags (Keep -c to prevent linking errors during compilation)
+CFLAGS_BASE = -O2 $(CPPFLAGS) $(CFLAGS)
+# Generate Bitcode: Must include -c and -emit-llvm
+CFLAGS_BC   = -O1 -emit-llvm -c -Xclang -disable-llvm-passes $(CPPFLAGS) $(CFLAGS)
+
+# 2. Automatically Discover Source Files
+# If Source is not defined in the Benchmark Makefile, automatically find all .c files in the current directory
+Source ?= $(wildcard *.c)
+OBJS    = $(Source:.c=.o)
+BCS     = $(Source:.c=.bc)
+
+# 3. Output Directory Configuration
+OUTDIR  = Output
+NATIVE_EXE = $(OUTDIR)/$(PROG).native
+LINKED_BC  = $(OUTDIR)/$(PROG).linked.rbc
+
+# Ensure Output directory exists
+$(shell $(MKDIR) $(OUTDIR))
+
+# ==============================================================================
+# Build Rules
+# ==============================================================================
+
+.PHONY: clean-common
+
+# Target A: Generate Baseline Executable (Corresponds to original %.native)
+$(NATIVE_EXE): $(Source)
+	@echo "  [CC] Building Baseline: $@"
+	@$(CC) $(CFLAGS_BASE) $(Source) -o $@ $(LDFLAGS) $(LIBS)
+
+# Target B: Generate Aggregated Bitcode (Corresponds to original %.linked.rbc)
+# Step B1: Compile each .c file to .bc
+$(OUTDIR)/%.bc: %.c
+	@echo "  [BC] Compiling $<"
+	@$(CC) $(CFLAGS_BC) $< -o $@
+
+# Step B2: Link all .bc files into one file
+$(LINKED_BC): $(addprefix $(OUTDIR)/, $(BCS))
+	@echo "  [LINK] Linking Bitcode: $@"
+	@$(LLVM_LINK) $^ -o $@
+
+# Clean Rules
+clean-common:
+	rm -rf $(OUTDIR)
