@@ -5,9 +5,10 @@
 #   2. make perf: Collects hardware counters (Cache Misses) using Linux perf.
 # Dependencies: Output/$(PROG).linked.rbc (from Makefile.common)
 # ==============================================================================
-ROOT_DIR ?= $(RDS_ROOT)
+
 # 1. Pass Configuration
 ROOT_DIR ?= $(RDS_ROOT)
+PASS_LIB ?= $(ROOT_DIR)/RDS_Prefetch/build/RDSPrefetchPass.so
 
 # Pass Names
 PASS_GREEDY    = rds-prefetch-greedy
@@ -43,16 +44,25 @@ SELECT_OUT = Output/selective.out
 # Ensure pass shared library is up-to-date when source changes
 # ==============================================================================
 
-$(PASS_LIB):
-	@echo "  [BUILD] Updating RDSPrefetchPass.so ..."
-	@$(MAKE) -C /n/eecs583a/home/lxxy/RDS-Prefetch/RDS_Prefetch/build
+# Comment out or fix the hardcoded path - TODO: FIX THIS!
+# $(PASS_LIB):
+# 	@echo "  [BUILD] Updating RDSPrefetchPass.so ..."
+# 	@$(MAKE) -C /n/eecs583a/home/lxxy/RDS-Prefetch/RDS_Prefetch/build
+
+# Better: Just check if it exists and give a helpful error
+check-pass-lib:
+	@if [ ! -f "$(PASS_LIB)" ]; then \
+		echo "[ERROR] Pass library not found at: $(PASS_LIB)"; \
+		echo "        Please build it first: make -C $(ROOT_DIR)/RDS_Prefetch/build"; \
+		exit 1; \
+	fi
 
 # ==============================================================================
 # Build Rules
 # ==============================================================================
 
 # Target A: Generate Greedy Bitcode and Count Prefetches
-$(BC_GREEDY): $(LINKED_BC) $(PASS_LIB)
+$(BC_GREEDY): $(LINKED_BC) check-pass-lib
 	@echo "  [OPT] Running Pass: $(PASS_GREEDY)..."
 	@$(OPT) -load-pass-plugin=$(PASS_LIB) -passes=$(PASS_GREEDY) $< -o $@
 	@# Count prefetches and save to file
@@ -61,7 +71,7 @@ $(BC_GREEDY): $(LINKED_BC) $(PASS_LIB)
 	 echo "  [INFO] Greedy Prefetches inserted: $$count"
 
 # Target B: Generate Selective Bitcode and Count Prefetches
-$(BC_SELECTIVE): $(LINKED_BC) $(PASS_LIB)
+$(BC_SELECTIVE): $(LINKED_BC) check-pass-lib
 	@echo "  [OPT] Running Pass: $(PASS_SELECTIVE)..."
 	@$(OPT) -load-pass-plugin=$(PASS_LIB) -passes=$(PASS_SELECTIVE) $< -o $@
 	@# Count prefetches and save to file
