@@ -8,7 +8,7 @@
 
 # 1. Pass Configuration
 ROOT_DIR ?= $(RDS_ROOT)
-PASS_LIB ?= $(ROOT_DIR)/RDS_Prefetch/build/RDSPrefetchPass.so
+PASS_LIB ?= $(ROOT_DIR)/build/rds_pass/libRDSPrefetchPass.so
 
 # Pass Names
 PASS_GREEDY    = rds-prefetch-greedy
