@@ -114,7 +114,7 @@ run_one_program() {
   rm -f Output/base.time.all Output/greedy.time.all Output/selective.time.all
   rm -f Output/perf_base.rate.all Output/perf_greedy.rate.all Output/perf_select.rate.all
 
-  for run in {1.."${NUM_RUNS}"}; do
+  for ((run=1; run<=NUM_RUNS; run++)); do
     echo "--- Run ${run}/${NUM_RUNS}: make time ---"
     if ! make time >/dev/null 2>&1; then
       echo "[ERROR] make time failed for ${bench_name}/${prog} (run ${run})"
@@ -191,15 +191,7 @@ run_one_program() {
   cd "${SCRIPT_DIR}" || true
 }
 
-run_set() {
-  local bench_name="$1"   # Olden or Ptrdist
-  local -n progs_ref="$2" # ZSH also supports nameref
-
-  for p in "${progs_ref[@]}"; do
-    run_one_program "$bench_name" "$p"
-  done
-}
-
+# SIMPLE FIX: Remove run_set function entirely and inline the loops
 if [[ $# -lt 1 ]]; then
   usage
   exit 1
@@ -209,14 +201,22 @@ arg="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
 
 case "$arg" in
   olden)
-    run_set "Olden" OLDEN_PROGS
+    for p in "${OLDEN_PROGS[@]}"; do
+      run_one_program "Olden" "$p"
+    done
     ;;
   ptrdist)
-    run_set "Ptrdist" PTRDIST_PROGS
+    for p in "${PTRDIST_PROGS[@]}"; do
+      run_one_program "Ptrdist" "$p"
+    done
     ;;
   all)
-    run_set "Olden" OLDEN_PROGS
-    run_set "Ptrdist" PTRDIST_PROGS
+    for p in "${OLDEN_PROGS[@]}"; do
+      run_one_program "Olden" "$p"
+    done
+    for p in "${PTRDIST_PROGS[@]}"; do
+      run_one_program "Ptrdist" "$p"
+    done
     ;;
   *)
     prog="$1"
