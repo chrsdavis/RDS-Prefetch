@@ -1,0 +1,244 @@
+# ==============================================================================
+# Makefile.rds - RDS Prefetch Pass Testing Script
+# Functions:
+#   1. make time: Measures execution time, verifies output, and counts prefetches.
+#   2. make perf: Collects hardware counters (Cache Misses) using Linux perf.
+# Dependencies: Output/$(PROG).linked.rbc (from Makefile.common)
+# ==============================================================================
+ROOT_DIR ?= $(RDS_ROOT)
+# 1. Pass Configuration
+ROOT_DIR ?= $(RDS_ROOT)
+
+# Pass Names
+PASS_GREEDY    = rds-prefetch-greedy
+PASS_SELECTIVE = rds-prefetch-selective
+
+# Tools
+OPT        = opt
+CLANG      = clang
+DIS        = llvm-dis
+
+# 2. File Definitions
+LINKED_BC  = Output/$(PROG).linked.rbc
+
+# Greedy Versions
+BC_GREEDY    = Output/$(PROG).greedy.bc
+EXE_GREEDY   = Output/$(PROG).greedy
+GREEDY_COUNT = Output/greedy.count
+
+# Selective Versions
+BC_SELECTIVE   = Output/$(PROG).selective.bc
+EXE_SELECTIVE  = Output/$(PROG).selective
+SELECT_COUNT   = Output/selective.count
+
+# Baseline Executable (from Makefile.common)
+NATIVE_EXE = Output/$(PROG).native
+
+# Output files for verification
+BASE_OUT   = Output/base.out
+GREEDY_OUT = Output/greedy.out
+SELECT_OUT = Output/selective.out
+
+# ==============================================================================
+# Ensure pass shared library is up-to-date when source changes
+# ==============================================================================
+
+$(PASS_LIB):
+	@echo "  [BUILD] Updating RDSPrefetchPass.so ..."
+	@$(MAKE) -C /n/eecs583a/home/lxxy/RDS-Prefetch/RDS_Prefetch/build
+
+# ==============================================================================
+# Build Rules
+# ==============================================================================
+
+# Target A: Generate Greedy Bitcode and Count Prefetches
+$(BC_GREEDY): $(LINKED_BC) $(PASS_LIB)
+	@echo "  [OPT] Running Pass: $(PASS_GREEDY)..."
+	@$(OPT) -load-pass-plugin=$(PASS_LIB) -passes=$(PASS_GREEDY) $< -o $@
+	@# Count prefetches and save to file
+	@count=$$($(DIS) $@ -o - | grep -c "llvm.prefetch" || echo "0"); \
+	 echo $$count > $(GREEDY_COUNT); \
+	 echo "  [INFO] Greedy Prefetches inserted: $$count"
+
+# Target B: Generate Selective Bitcode and Count Prefetches
+$(BC_SELECTIVE): $(LINKED_BC) $(PASS_LIB)
+	@echo "  [OPT] Running Pass: $(PASS_SELECTIVE)..."
+	@$(OPT) -load-pass-plugin=$(PASS_LIB) -passes=$(PASS_SELECTIVE) $< -o $@
+	@# Count prefetches and save to file
+	@count=$$($(DIS) $@ -o - | grep -c "llvm.prefetch" || echo "0"); \
+	 echo $$count > $(SELECT_COUNT); \
+	 echo "  [INFO] Selective Prefetches inserted: $$count"
+
+# Target C: Build Greedy Executable
+$(EXE_GREEDY): $(BC_GREEDY)
+	@echo "  [CC] Building Greedy Executable..."
+	@$(CC) -O2 $< -o $@ $(LDFLAGS) $(LIBS)
+
+# Target D: Build Selective Executable
+$(EXE_SELECTIVE): $(BC_SELECTIVE)
+	@echo "  [CC] Building Selective Executable..."
+	@$(CC) -O2 $< -o $@ $(LDFLAGS) $(LIBS)
+
+# ==============================================================================
+# Test Rule: 'make time'
+# Measures execution time, verifies output correctness, and compares prefetch counts
+# ==============================================================================
+
+time: $(NATIVE_EXE) $(EXE_GREEDY) $(EXE_SELECTIVE)
+	@echo "=================================================="
+	@echo "Testing $(PROG) | Workload: $(RUN_OPTIONS)"
+	@echo "=================================================="
+
+# Logic to handle Input Redirection (< input.large) vs Command Line Args
+ifdef STDIN_FILENAME
+	@echo "  [MODE] Using Input Redirection < $(STDIN_FILENAME)"
+	
+	@# 1. Run Baseline
+	@echo -n "  [BASE] Running... "
+	@t1=$$(date +%s%N); \
+	$(NATIVE_EXE) $(RUN_OPTIONS) < $(STDIN_FILENAME) > $(BASE_OUT) 2>&1; \
+	t2=$$(date +%s%N); \
+	echo "scale=4; ($$t2 - $$t1)/1000000000" | bc > Output/base.time
+	@echo "$$(cat Output/base.time) s"
+	
+	@# 2. Run Greedy
+	@echo -n "  [GREEDY] Running... "
+	@t1=$$(date +%s%N); \
+	$(EXE_GREEDY) $(RUN_OPTIONS) < $(STDIN_FILENAME) > $(GREEDY_OUT) 2>&1; \
+	t2=$$(date +%s%N); \
+	echo "scale=4; ($$t2 - $$t1)/1000000000" | bc > Output/greedy.time
+	@echo -n "$$(cat Output/greedy.time) s "
+	@diff -q $(BASE_OUT) $(GREEDY_OUT) > /dev/null && echo "[PASS]" || echo "[FAIL: Output Mismatch]"
+
+	@# 3. Run Selective
+	@echo -n "  [SELECT] Running... "
+	@t1=$$(date +%s%N); \
+	$(EXE_SELECTIVE) $(RUN_OPTIONS) < $(STDIN_FILENAME) > $(SELECT_OUT) 2>&1; \
+	t2=$$(date +%s%N); \
+	echo "scale=4; ($$t2 - $$t1)/1000000000" | bc > Output/selective.time
+	@echo -n "$$(cat Output/selective.time) s "
+	@diff -q $(BASE_OUT) $(SELECT_OUT) > /dev/null && echo "[PASS]" || echo "[FAIL: Output Mismatch]"
+
+else
+	@echo "  [MODE] Using Command Line Arguments"
+
+	@# 1. Run Baseline
+	@echo -n "  [BASE] Running... "
+	@t1=$$(date +%s%N); \
+	$(NATIVE_EXE) $(RUN_OPTIONS) > $(BASE_OUT) 2>&1; \
+	t2=$$(date +%s%N); \
+	echo "scale=4; ($$t2 - $$t1)/1000000000" | bc > Output/base.time
+	@echo "$$(cat Output/base.time) s"
+
+	@# 2. Run Greedy
+	@echo -n "  [GREEDY] Running... "
+	@t1=$$(date +%s%N); \
+	$(EXE_GREEDY) $(RUN_OPTIONS) > $(GREEDY_OUT) 2>&1; \
+	t2=$$(date +%s%N); \
+	echo "scale=4; ($$t2 - $$t1)/1000000000" | bc > Output/greedy.time
+	@echo -n "$$(cat Output/greedy.time) s "
+	@diff -q $(BASE_OUT) $(GREEDY_OUT) > /dev/null && echo "[PASS]" || echo "[FAIL: Output Mismatch]"
+
+	@# 3. Run Selective
+	@echo -n "  [SELECT] Running... "
+	@t1=$$(date +%s%N); \
+	$(EXE_SELECTIVE) $(RUN_OPTIONS) > $(SELECT_OUT) 2>&1; \
+	t2=$$(date +%s%N); \
+	echo "scale=4; ($$t2 - $$t1)/1000000000" | bc > Output/selective.time
+	@echo -n "$$(cat Output/selective.time) s "
+	@diff -q $(BASE_OUT) $(SELECT_OUT) > /dev/null && echo "[PASS]" || echo "[FAIL: Output Mismatch]"
+endif
+
+	@echo "------------------------------------------------------------------"
+	@# Summary Table Calculation (Includes Prefetch Counts)
+	@cnt_g=$$(cat $(GREEDY_COUNT)); \
+	 cnt_s=$$(cat $(SELECT_COUNT)); \
+	 awk -v cg="$$cnt_g" -v cs="$$cnt_s" 'FNR==1{times[NR]=$$1} END { \
+		base = times[1]; \
+		greedy = times[2]; \
+		select = times[3]; \
+		\
+		printf "%-10s | %-12s | %-12s | %-10s\n", "Strategy", "Prefetches", "Time(s)", "Speedup"; \
+		print "-----------|--------------|--------------|-----------"; \
+		printf "%-10s | %-12s | %-12.4f | %-10s\n", "Baseline", "0", base, "1.00x"; \
+		\
+		if(greedy > 0) printf "%-10s | %-12s | %-12.4f | %-10.2fx\n", "Greedy", cg, greedy, base/greedy; \
+		else printf "%-10s | %-12s | %-12s | %-10s\n", "Greedy", cg, "Error", "N/A"; \
+		\
+		if(select > 0) printf "%-10s | %-12s | %-12.4f | %-10.2fx\n", "Selective", cs, select, base/select; \
+		else printf "%-10s | %-12s | %-12s | %-10s\n", "Selective", cs, "Error", "N/A"; \
+	}' Output/base.time Output/greedy.time Output/selective.time
+	@echo "=================================================================="
+
+# ==============================================================================
+# Performance Rule: 'make perf'
+# Runs 'perf stat' multiple times to collect cache miss rates
+# ==============================================================================
+
+perf: $(NATIVE_EXE) $(EXE_GREEDY) $(EXE_SELECTIVE)
+	@echo "=================================================="
+	@echo "Running Perf Analysis (Repeat 5 times)"
+	@echo "Events: cache-misses, cache-references"
+	@echo "=================================================="
+
+# Helper function to run perf based on input mode
+ifdef STDIN_FILENAME
+	@echo "  [BASE] Profiling..."
+	@perf stat -r 5 -e cache-misses,cache-references $(NATIVE_EXE) $(RUN_OPTIONS) < $(STDIN_FILENAME) > /dev/null 2> Output/perf_base.txt
+	@echo "  [GREEDY] Profiling..."
+	@perf stat -r 5 -e cache-misses,cache-references $(EXE_GREEDY) $(RUN_OPTIONS) < $(STDIN_FILENAME) > /dev/null 2> Output/perf_greedy.txt
+	@echo "  [SELECT] Profiling..."
+	@perf stat -r 5 -e cache-misses,cache-references $(EXE_SELECTIVE) $(RUN_OPTIONS) < $(STDIN_FILENAME) > /dev/null 2> Output/perf_select.txt
+else
+	@echo "  [BASE] Profiling..."
+	@perf stat -r 5 -e cache-misses,cache-references $(NATIVE_EXE) $(RUN_OPTIONS) > /dev/null 2> Output/perf_base.txt
+	@echo "  [GREEDY] Profiling..."
+	@perf stat -r 5 -e cache-misses,cache-references $(EXE_GREEDY) $(RUN_OPTIONS) > /dev/null 2> Output/perf_greedy.txt
+	@echo "  [SELECT] Profiling..."
+	@perf stat -r 5 -e cache-misses,cache-references $(EXE_SELECTIVE) $(RUN_OPTIONS) > /dev/null 2> Output/perf_select.txt
+endif
+
+	@echo "--------------------------------------------------"
+	@echo "Perf Results Summary (Avg of 5 runs)"
+	@echo "--------------------------------------------------"
+	
+	@# Extract metrics and print table using AWK
+	@awk ' \
+		function get_rate(file) { \
+			misses = 0; refs = 0; \
+			while ((getline line < file) > 0) { \
+				if (line ~ /cache-misses/) { \
+					gsub(/,/, "", line); \
+					split(line, a, " "); \
+					misses = a[1]; \
+				} \
+				if (line ~ /cache-references/) { \
+					gsub(/,/, "", line); \
+					split(line, a, " "); \
+					refs = a[1]; \
+				} \
+			} \
+			close(file); \
+			if (refs > 0) return (misses / refs) * 100; \
+			return 0; \
+		} \
+		BEGIN { \
+			base_rate = get_rate("Output/perf_base.txt"); \
+			greedy_rate = get_rate("Output/perf_greedy.txt"); \
+			select_rate = get_rate("Output/perf_select.txt"); \
+			\
+			printf "%-10s | %-12s | %-12s\n", "Strategy", "Miss Rate(%)", "Improvement"; \
+			print "-----------|--------------|-------------"; \
+			printf "%-10s | %-12.2f | %-12s\n", "Baseline", base_rate, "-"; \
+			\
+			imp_g = ((base_rate - greedy_rate) / base_rate) * 100; \
+			printf "%-10s | %-12.2f | %-12.1f%%\n", "Greedy", greedy_rate, imp_g; \
+			\
+			imp_s = ((base_rate - select_rate) / base_rate) * 100; \
+			printf "%-10s | %-12.2f | %-12.1f%%\n", "Selective", select_rate, imp_s; \
+		}'
+	@echo "=================================================="
+
+# Cleanup
+clean: clean-common
+	rm -f $(EXE_GREEDY) $(EXE_SELECTIVE) $(BC_GREEDY) $(BC_SELECTIVE) Output/*.time Output/*.out Output/*.count Output/perf_*.txt
