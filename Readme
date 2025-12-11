@@ -1,0 +1,43 @@
+### 1. Build LLVM Pass
+```
+$ mkdir build && cd build
+$ cmake ..
+$ make -j
+$ cd ..
+```
+
+### 2. Run Prefetch Experiments (Greedy / Selective)
+```
+$ chmod +x test.sh
+
+Single benchmark (auto-detect Olden/Ptrdist):
+$ ./test.sh em3d
+$ ./test.sh bh
+$ ./test.sh anagram
+
+All Olden:
+$ ./test.sh olden
+
+All Ptrdist:
+$ ./test.sh ptrdist
+
+All benchmarks:
+$ ./test.sh all
+
+test.sh runs "make time" and "make perf", producing intermediate
+results in each benchmark's Output/ directory (.bc, .time, .out, perf_*.txt).
+```
+
+### 3. Clean Intermediate Files
+```
+$ chmod +x clean.sh
+
+Clean all benchmark intermediates:
+$ ./clean.sh
+
+Clean intermediates + remove build/:
+$ ./clean.sh --all
+
+Only remove build/:
+$ ./clean.sh --build
+```
