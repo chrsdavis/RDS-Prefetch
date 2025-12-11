@@ -6,6 +6,14 @@ $ make -j
 $ cd ..
 ```
 
+Or, on Mac with LLVM installed via Homebrow, you can just run:
+
+```
+sh mac_build.sh
+```
+
+without needing to manually specify your LLVM source.
+
 ### 2. Run Prefetch Experiments (Greedy / Selective)
 ```
 $ chmod +x test.sh
