@@ -2,16 +2,7 @@ add_library(RDSPrefetchPass MODULE
     rdsPrefetchPass.cpp
 )
 
-target_link_libraries(RDSPrefetchPass PRIVATE
-    LLVMCore
-    LLVMAnalysis
-    LLVMSupport
-    LLVMTransformUtils
-    LLVMIRReader
-    LLVMBitWriter
-    LLVMBitReader
-    LLVMPasses
-)
+target_link_libraries(RDSPrefetchPass LLVM)
 
 target_compile_features(RDSPrefetchPass PRIVATE cxx_range_for cxx_auto_type)
 set_target_properties(RDSPrefetchPass PROPERTIES
