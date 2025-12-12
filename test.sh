@@ -2,6 +2,7 @@
 
 # Automated driver for RDS prefetch experiments.
 # Run from the MultiSource directory (where Makefile.rds lives).
+
 REPO_ROOT="$(realpath "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
 export RDS_ROOT="${REPO_ROOT}"
 echo "RDS_ROOT set to ${RDS_ROOT}"
@@ -11,10 +12,12 @@ BENCH_ROOT="$(realpath "${SCRIPT_DIR}/multisrc/Benchmarks")"
 
 OLDEN_DIR="$(realpath "${BENCH_ROOT}/Olden")"
 PTRDIST_DIR="$(realpath "${BENCH_ROOT}/Ptrdist")"
+CUSTOM_DIR="$(realpath "${BENCH_ROOT}/RDS")"
 
 # Program lists (adapt to your tree if needed)
 OLDEN_PROGS=(bh bisort em3d health mst perimeter power treeadd tsp voronoi)
 PTRDIST_PROGS=(anagram bc ft ks yacr2)
+CUSTOM_PROGS=(binaryTree linkedList doublyLinkedList ternaryTree treeWithParent graphTraversal)
 
 NUM_RUNS=3
 
@@ -23,12 +26,14 @@ usage() {
 Usage:
   $0 olden           # run all Olden benchmarks
   $0 ptrdist         # run all Ptrdist benchmarks
-  $0 all             # run all Olden + Ptrdist benchmarks
-  $0 <prog>          # run single program (e.g., em3d, bh, anagram, ...)
+  $0 rds             # run all custom RDS benchmarks
+  $0 all             # run all Olden + Ptrdist + RDS benchmarks
+  $0 <prog>          # run single program (e.g., em3d, bh, anagram, binaryTree, ...)
 
-The script expects to be placed in the MultiSource directory and uses:
+The script expects to be placed in the repo root and uses:
   multisrc/Benchmarks/Olden/<prog>
-  multisrcBenchmarks/Ptrdist/<prog>
+  multisrc/Benchmarks/Ptrdist/<prog>
+  multisrc/Benchmarks/RDS/<prog>
 EOF
 }
 
@@ -82,14 +87,19 @@ avg_from_file() {
 }
 
 run_one_program() {
-  local bench_name="$1"   # Olden or Ptrdist
+  local bench_name="$1"   # Olden / Ptrdist / RDS
   local prog="$2"
   local dir
 
   if [[ "$bench_name" == "Olden" ]]; then
     dir="${OLDEN_DIR}/${prog}"
-  else
+  elif [[ "$bench_name" == "Ptrdist" ]]; then
     dir="${PTRDIST_DIR}/${prog}"
+  elif [[ "$bench_name" == "RDS" ]]; then
+    dir="${CUSTOM_DIR}/${prog}"
+  else
+    echo "[WARN] Unknown benchmark family: ${bench_name}"
+    return
   fi
 
   if [[ ! -d "$dir" ]]; then
@@ -190,7 +200,7 @@ run_one_program() {
 }
 
 run_set() {
-  local bench_name="$1"   # Olden or Ptrdist
+  local bench_name="$1"   # Olden / Ptrdist / RDS
   local -n progs_ref="$2" # bash nameref
 
   for p in "${progs_ref[@]}"; do
@@ -212,9 +222,13 @@ case "$arg" in
   ptrdist)
     run_set "Ptrdist" PTRDIST_PROGS
     ;;
+  rds)
+    run_set "RDS" CUSTOM_PROGS
+    ;;
   all)
-    run_set "Olden" OLDEN_PROGS
+    run_set "Olden"   OLDEN_PROGS
     run_set "Ptrdist" PTRDIST_PROGS
+    run_set "RDS"     CUSTOM_PROGS
     ;;
   *)
     prog="$1"
@@ -222,10 +236,13 @@ case "$arg" in
       run_one_program "Olden" "$prog"
     elif prog_in_array "$prog" "${PTRDIST_PROGS[@]}"; then
       run_one_program "Ptrdist" "$prog"
+    elif prog_in_array "$prog" "${CUSTOM_PROGS[@]}"; then
+      run_one_program "RDS" "$prog"
     else
       echo "[ERROR] Unknown program: $prog"
       echo "       Valid Olden   : ${OLDEN_PROGS[*]}"
       echo "       Valid Ptrdist : ${PTRDIST_PROGS[*]}"
+      echo "       Valid RDS     : ${CUSTOM_PROGS[*]}"
       exit 1
     fi
     ;;
