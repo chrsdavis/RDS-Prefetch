@@ -8,10 +8,12 @@ BENCH_ROOT="${MULTISRC_ROOT}/Benchmarks"
 
 OLDEN_DIR="${BENCH_ROOT}/Olden"
 PTRDIST_DIR="${BENCH_ROOT}/Ptrdist"
+RDS_DIR="${BENCH_ROOT}/RDS"
 
 # Program lists (keep in sync with test.sh)
 OLDEN_PROGS=(bh bisort em3d health mst perimeter power treeadd tsp voronoi)
 PTRDIST_PROGS=(anagram bc ft ks yacr2)
+RDS_PROGS=(binaryTree linkedList doublyLinkedList ternaryTree treeWithParent graphTraversal)
 
 DO_CLEAN_BENCHES=true
 DO_CLEAN_BUILD=false
@@ -19,7 +21,7 @@ DO_CLEAN_BUILD=false
 usage() {
   cat <<EOF
 Usage:
-  $0            # clean all Olden/Ptrdist benchmarks (make clean)
+  $0            # clean all Olden/Ptrdist/RDS benchmarks (make clean)
   $0 --all      # clean benchmarks + remove build/ directory
   $0 --build    # only remove build/ directory
 
@@ -77,6 +79,11 @@ clean_benchmarks() {
   # Ptrdist
   for p in "${PTRDIST_PROGS[@]}"; do
     clean_one_dir "${PTRDIST_DIR}/${p}"
+  done
+
+  # RDS
+  for p in "${RDS_PROGS[@]}"; do
+    clean_one_dir "${RDS_DIR}/${p}"
   done
 
   echo "--------------------------------------------------"
