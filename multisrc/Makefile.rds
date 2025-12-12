@@ -2,12 +2,14 @@
 # Makefile.rds - RDS Prefetch Pass Testing Script
 # Functions:
 #   1. make time: Measures execution time, verifies output, and counts prefetches.
+#                 Also generates readable IR (.ll) for Baseline, Greedy, and Selective.
 #   2. make perf: Collects hardware counters (Cache Misses) using Linux perf.
 # Dependencies: Output/$(PROG).linked.rbc (from Makefile.common)
 # ==============================================================================
 ROOT_DIR ?= $(RDS_ROOT)
+
 # 1. Pass Configuration
-ROOT_DIR ?= $(RDS_ROOT)
+PASS_LIB       = $(RDS_ROOT)/build/rds_pass/libRDSPrefetchPass.so
 
 # Pass Names
 PASS_GREEDY    = rds-prefetch-greedy
@@ -21,18 +23,21 @@ DIS        = llvm-dis
 # 2. File Definitions
 LINKED_BC  = Output/$(PROG).linked.rbc
 
+# Baseline Versions
+LL_BASE    = Output/$(PROG).baseline.ll
+NATIVE_EXE = Output/$(PROG).native
+
 # Greedy Versions
 BC_GREEDY    = Output/$(PROG).greedy.bc
+LL_GREEDY    = Output/$(PROG).greedy.ll
 EXE_GREEDY   = Output/$(PROG).greedy
 GREEDY_COUNT = Output/greedy.count
 
 # Selective Versions
 BC_SELECTIVE   = Output/$(PROG).selective.bc
+LL_SELECTIVE   = Output/$(PROG).selective.ll
 EXE_SELECTIVE  = Output/$(PROG).selective
 SELECT_COUNT   = Output/selective.count
-
-# Baseline Executable (from Makefile.common)
-NATIVE_EXE = Output/$(PROG).native
 
 # Output files for verification
 BASE_OUT   = Output/base.out
@@ -51,30 +56,40 @@ $(PASS_LIB):
 # Build Rules
 # ==============================================================================
 
-# Target A: Generate Greedy Bitcode and Count Prefetches
+# Target A: Generate Baseline IR
+# Disassembles the linked bitcode before any passes are applied
+$(LL_BASE): $(LINKED_BC)
+	@echo "  [DIS] Generating Baseline IR: $(LL_BASE)..."
+	@$(DIS) $< -o $@
+
+# Target B: Generate Greedy Bitcode, IR, and Count Prefetches
 $(BC_GREEDY): $(LINKED_BC) $(PASS_LIB)
 	@echo "  [OPT] Running Pass: $(PASS_GREEDY)..."
 	@$(OPT) -load-pass-plugin=$(PASS_LIB) -passes=$(PASS_GREEDY) $< -o $@
-	@# Count prefetches and save to file
-	@count=$$($(DIS) $@ -o - | grep -c "llvm.prefetch" || echo "0"); \
+	@echo "  [DIS] Generating Greedy IR: $(LL_GREEDY)..."
+	@$(DIS) $@ -o $(LL_GREEDY)
+	@# Count prefetches from the generated LL file
+	@count=$$(grep -c "llvm.prefetch" $(LL_GREEDY) || echo "0"); \
 	 echo $$count > $(GREEDY_COUNT); \
 	 echo "  [INFO] Greedy Prefetches inserted: $$count"
 
-# Target B: Generate Selective Bitcode and Count Prefetches
+# Target C: Generate Selective Bitcode, IR, and Count Prefetches
 $(BC_SELECTIVE): $(LINKED_BC) $(PASS_LIB)
 	@echo "  [OPT] Running Pass: $(PASS_SELECTIVE)..."
 	@$(OPT) -load-pass-plugin=$(PASS_LIB) -passes=$(PASS_SELECTIVE) $< -o $@
-	@# Count prefetches and save to file
-	@count=$$($(DIS) $@ -o - | grep -c "llvm.prefetch" || echo "0"); \
+	@echo "  [DIS] Generating Selective IR: $(LL_SELECTIVE)..."
+	@$(DIS) $@ -o $(LL_SELECTIVE)
+	@# Count prefetches from the generated LL file
+	@count=$$(grep -c "llvm.prefetch" $(LL_SELECTIVE) || echo "0"); \
 	 echo $$count > $(SELECT_COUNT); \
 	 echo "  [INFO] Selective Prefetches inserted: $$count"
 
-# Target C: Build Greedy Executable
+# Target D: Build Greedy Executable
 $(EXE_GREEDY): $(BC_GREEDY)
 	@echo "  [CC] Building Greedy Executable..."
 	@$(CC) -O2 $< -o $@ $(LDFLAGS) $(LIBS)
 
-# Target D: Build Selective Executable
+# Target E: Build Selective Executable
 $(EXE_SELECTIVE): $(BC_SELECTIVE)
 	@echo "  [CC] Building Selective Executable..."
 	@$(CC) -O2 $< -o $@ $(LDFLAGS) $(LIBS)
@@ -84,7 +99,8 @@ $(EXE_SELECTIVE): $(BC_SELECTIVE)
 # Measures execution time, verifies output correctness, and compares prefetch counts
 # ==============================================================================
 
-time: $(NATIVE_EXE) $(EXE_GREEDY) $(EXE_SELECTIVE)
+# Added $(LL_BASE) to dependencies so Baseline IR is generated
+time: $(NATIVE_EXE) $(EXE_GREEDY) $(EXE_SELECTIVE) $(LL_BASE)
 	@echo "=================================================="
 	@echo "Testing $(PROG) | Workload: $(RUN_OPTIONS)"
 	@echo "=================================================="
@@ -150,7 +166,7 @@ else
 endif
 
 	@echo "------------------------------------------------------------------"
-	@# Summary Table Calculation (Includes Prefetch Counts)
+	@# Summary Table Calculation
 	@cnt_g=$$(cat $(GREEDY_COUNT)); \
 	 cnt_s=$$(cat $(SELECT_COUNT)); \
 	 awk -v cg="$$cnt_g" -v cs="$$cnt_s" 'FNR==1{times[NR]=$$1} END { \
@@ -241,4 +257,4 @@ endif
 
 # Cleanup
 clean: clean-common
-	rm -f $(EXE_GREEDY) $(EXE_SELECTIVE) $(BC_GREEDY) $(BC_SELECTIVE) Output/*.time Output/*.out Output/*.count Output/perf_*.txt
+	rm -f $(EXE_GREEDY) $(EXE_SELECTIVE) $(BC_GREEDY) $(BC_SELECTIVE) Output/*.time Output/*.out Output/*.count Output/perf_*.txt Output/*.ll

@@ -2,14 +2,15 @@
 
 # Automated driver for RDS prefetch experiments.
 # Run from the MultiSource directory (where Makefile.rds lives).
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(realpath "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
 export RDS_ROOT="${REPO_ROOT}"
+echo "RDS_ROOT set to ${RDS_ROOT}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BENCH_ROOT="${SCRIPT_DIR}/multisrc/Benchmarks"
+SCRIPT_DIR="$(realpath "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
+BENCH_ROOT="$(realpath "${SCRIPT_DIR}/multisrc/Benchmarks")"
 
-OLDEN_DIR="${BENCH_ROOT}/Olden"
-PTRDIST_DIR="${BENCH_ROOT}/Ptrdist"
+OLDEN_DIR="$(realpath "${BENCH_ROOT}/Olden")"
+PTRDIST_DIR="$(realpath "${BENCH_ROOT}/Ptrdist")"
 
 # Program lists (adapt to your tree if needed)
 OLDEN_PROGS=(bh bisort em3d health mst perimeter power treeadd tsp voronoi)
