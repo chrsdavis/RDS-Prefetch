@@ -1,4 +1,4 @@
-LEVEL = ../../../..
+LEVEL = ../../..
 
 PROG     = health
 CPPFLAGS = -DTORONTO
@@ -19,5 +19,5 @@ endif
 endif
 endif
 
-include $(LEVEL)/MultiSource/Makefile.multisrc
-include $(LEVEL)/MultiSource/Makefile.rds
+include $(LEVEL)/Makefile.multisrc
+include $(LEVEL)/Makefile.rds
